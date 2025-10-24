@@ -1,0 +1,5 @@
+name: skeleton_env
+channels:
+  - conda-forge
+  - defaults
+prefix: C:\Users\emero\miniconda3\envs\skeleton_env
