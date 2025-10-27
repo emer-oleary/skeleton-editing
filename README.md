@@ -1,6 +1,6 @@
-# 🧠 Skeleton Editing Toolkit
+# 🩻 Skeleton Graph Editing Toolkit
 
-Python scripts for reconstructing, cleaning, and analyzing 3D vessel skeletons from high-resolution micro-CT segmentations and Avizo HxSpatialGraph (`.am`) files. Designed for vascular connectivity, permeability, and flow modeling pipelines.
+Python scripts for reconstructing, cleaning, and analyzing 3D blood vessel skeletons from high-resolution CT segmentations ('.tif) and Avizo SpatialGraph (`.am`) files. Designed for vascular connectivity, permeability, and flow modeling pipelines.
 
 ## ⚙️ Environment Setup
 
@@ -46,16 +46,44 @@ Estimates effective vessel radius via 2D orthogonal reslices, fits a linear mode
 * **Input:** segmentation `.tif`, skeleton `.am`
 * **Output:** adjusted `.am` + regression plot
 
+
 ## 🧭 Typical Workflow
-```
-1️⃣  Start from a binary segmentation (.tif)
-2️⃣  Generate a skeleton in Avizo  (.am) (Centerline Tree recommended - see note below re parameters)
-3️⃣  Reconnect broken vessel segments
-4️⃣  Filter small, disconnected components
-5️⃣  Compute vessel metrics
-6️⃣  Plot and compare algorithms
-7️⃣  (Optional) Refit radii using 2D reslices
-```
+
+The exact sequence of scripts depends on your goal.  
+Below is an example workflow for **cleaning a vessel segmentation** using a reconnected skeleton graph.
+
+---
+
+### 🧪 Example: Cleaning a Vessel Segmentation with a Reconnected Skeleton Graph
+
+1. **Start with a binary vessel segmentation** (`.tif`)  
+   Run a skeletonization in **Avizo**, using the **Centerline Tree** module (see *Centerline Tree Parameters* below for slope, zeroVal, and parts guidance).
+
+2. **Adjust the radius values** of the resulting spatial graph using  
+   `replace_spatial_graph_point_thickness_with_2D_reslice_eff_radius.py`  
+   This step refines each vessel's local radius using 2D reslice measurements.
+
+3. **Reconnect missing or truncated segments** with  
+   `reconnect_disconnected_segments_in_spatial_graph.py`  
+   This reconstructs vessel continuity by bridging small gaps in the skeleton.
+
+4. **Filter the segmentation** using  
+   `filter_segmentation_connected_components_by_skeleton_subgraph_num_segments.py`  
+   This removes small or isolated components whose corresponding skeleton subgraphs have fewer than a specified number of connected segments.
+
+5. **(Optional) Verify the reconnection visually** by generating a voxelized skeleton volume with  
+   `generate_skeleton_graph_volume.py`  
+   This produces a `.tif` rendering of the reconnected skeleton for overlay or inspection in 3D visualization tools.
+
+6. **(Optional) Quantify and visualize network properties** using  
+   `calculate_vessel_network_properties.py` and `plot_vessel_network_properties.py`  
+   These scripts compute and plot geometric and topological metrics for the reconstructed vessel network.
+
+---
+
+💡 **In short:**  
+> **Segmentation** (`.tif`) → **Centerline Tree** (`.am`) → **Adjust radii** → **Reconnect** → **Filter** → *(Optional)* **Visualize & Analyze**
+
 
 > **Note on Centerline Tree parameters:**  
 > You can use Avizo's default parameters or start with optimized values from [Walsh et al. (2024)](https://doi.org/10.1016/j.compbiomed.2024.108140): **Slope = 5.81**, **zeroVal = 2.6**, **Number of parts = -1** (always use -1 for binary segmentations).
@@ -67,16 +95,10 @@ Estimates effective vessel radius via 2D orthogonal reslices, fits a linear mode
 ## 🧩 Notes & Tips
 
 * 🧠 **Axis order:** TIFF = `[Z, Y, X]`; Spatial graph = `[x, y, z]`. Index carefully to avoid flipped outputs.
-* ⚡ **Distance maps:** Prefer Euclidean EDT for precision; Chamfer CDT for speed.
 * 🎯 **Reslice tuning:**
   * Collapsed vessels → `subvolume_edge_size_cdm_factor ≈ 5–8`
   * Round vessels → `≈ 2–5`
-* 🪶 **Performance:** Use coarse-to-fine reslice search or local PCA to reduce runtime.
 
 ## 🧾 Citation
 
 If you use this toolkit in academic work, please cite your project and link to this repository.
-
-## 🪪 License
-
-MIT License (recommended). Free for academic and non-commercial use.
