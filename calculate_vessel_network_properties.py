@@ -267,6 +267,7 @@ def calculate_branching_angles_local(nodes, segments, segment_radii, segment_len
     return branching_angles
 
 ''' 
+'''
 # Global branching angle (measurement points located at segment end points) Note: global method is better for comparison of different alogrithms. ...
 # ... The local approach measures the 1st point along the segment but the point spacing varies between algorithms.)
 def calculate_branching_angles_global(nodes, segments, segment_radii, segment_lengths):
@@ -317,7 +318,64 @@ def calculate_branching_angles_global(nodes, segments, segment_radii, segment_le
         branching_angles.append(angle_deg)
 
     return branching_angles
+'''
 
+# Global branching - added check for only 2 child segments before calculation
+def calculate_branching_angles_global(nodes, segments, segment_radii, segment_lengths):
+    # Convert nodes to dictionary for faster access
+    node_coords = {int(n[0]): np.array([n[1], n[2], n[3]]) for n in nodes}  # index: [z, y, x]
+    
+    # Step 1: Build degree map for each node
+    from collections import defaultdict
+    node_to_segments = defaultdict(list)  # node index -> list of segment indices
+    for idx, (n1, n2) in enumerate(segments):
+        node_to_segments[n1].append(idx)
+        node_to_segments[n2].append(idx)
+    
+    branching_angles = []
+    # Step 2: Loop through nodes of degree 3
+    for node_idx, seg_indices in node_to_segments.items():
+        if len(seg_indices) != 3:
+            continue  # skip non-degree-3 nodes
+        
+        # Step 3: Identify parent (segment with largest radius)
+        radii = [segment_radii[i] for i in seg_indices]
+        parent_idx = seg_indices[np.argmax(radii)]
+        child_indices = [i for i in seg_indices if i != parent_idx]
+        
+        # **FIX: Check if we have exactly 2 child segments**
+        if len(child_indices) != 2:
+            continue  # Skip this node if we don't have exactly 2 children
+        
+        # Step 4: Find central node coordinates
+        center = node_coords[node_idx]
+        
+        # Step 5: For each child segment, find the *other* node to get direction
+        child_vectors = []
+        for seg_idx in child_indices:
+            n1, n2 = segments[seg_idx]
+            other_node = n2 if n1 == node_idx else n1
+            vec = node_coords[other_node] - center
+            child_vectors.append(vec)
+        
+        # Normalize child vectors
+        norm1 = np.linalg.norm(child_vectors[0])
+        v1 = child_vectors[0] / norm1 if norm1 > 0 else np.zeros_like(child_vectors[0])
+        
+        norm2 = np.linalg.norm(child_vectors[1])
+        v2 = child_vectors[1] / norm2 if norm2 > 0 else np.zeros_like(child_vectors[1])
+        
+        # **FIX: Skip if either vector has zero length**
+        if norm1 == 0 or norm2 == 0:
+            continue
+        
+        # Step 6: Compute angle in degrees
+        dot_product = np.clip(np.dot(v1, v2), -1.0, 1.0)
+        angle_rad = np.arccos(dot_product)
+        angle_deg = np.degrees(angle_rad)
+        branching_angles.append(angle_deg)
+    
+    return branching_angles
 
 def calculate_vessel_density(num_segments, image_size, image_resolution):
     # Calculate total volume in µm³
@@ -536,4 +594,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
     
