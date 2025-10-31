@@ -271,108 +271,112 @@ def calculate_branching_angles_local(nodes, segments, segment_radii, segment_len
 # Global branching angle (measurement points located at segment end points) Note: global method is better for comparison of different alogrithms. ...
 # ... The local approach measures the 1st point along the segment but the point spacing varies between algorithms.)
 def calculate_branching_angles_global(nodes, segments, segment_radii, segment_lengths):
-    # Convert nodes to dictionary for faster access
-    node_coords = {int(n[0]): np.array([n[1], n[2], n[3]]) for n in nodes}  # index: [z, y, x]
-    
-    # Step 1: Build degree map for each node
     from collections import defaultdict
-    node_to_segments = defaultdict(list)  # node index -> list of segment indices
-    for idx, (n1, n2) in enumerate(segments):
-        node_to_segments[n1].append(idx)
-        node_to_segments[n2].append(idx)
+    from scipy.spatial import cKDTree
     
-    branching_angles = []
-
-    # Step 2: Loop through nodes of degree 3
-    for node_idx, seg_indices in node_to_segments.items():
-        if len(seg_indices) != 3:
-            continue  # skip non-degree-3 nodes
-
-        # Step 3: Identify parent (segment with largest radius)
-        radii = [segment_radii[i] for i in seg_indices]
-        parent_idx = seg_indices[np.argmax(radii)]
-        child_indices = [i for i in seg_indices if i != parent_idx]
-
-        # Step 4: Find central node coordinates
-        center = node_coords[node_idx]
-
-        # Step 5: For each child segment, find the *other* node to get direction
-        child_vectors = []
-        for seg_idx in child_indices:
-            n1, n2 = segments[seg_idx]
-            other_node = n2 if n1 == node_idx else n1
-            vec = node_coords[other_node] - center
-            child_vectors.append(vec)
-
-        # Normalize child vectors
-        norm1 = np.linalg.norm(child_vectors[0])
-        v1 = child_vectors[0] / norm1 if norm1 > 0 else np.zeros_like(child_vectors[0])
-        norm2 = np.linalg.norm(child_vectors[1])
-        v2 = child_vectors[1] / norm2 if norm2 > 0 else np.zeros_like(child_vectors[1])
-
-        # Step 6: Compute angle in degrees
-        dot_product = np.clip(np.dot(v1, v2), -1.0, 1.0)
-        angle_rad = np.arccos(dot_product)
-        angle_deg = np.degrees(angle_rad)
-
-        branching_angles.append(angle_deg)
-
-    return branching_angles
-'''
-
-# Global branching - added check for only 2 child segments before calculation
-def calculate_branching_angles_global(nodes, segments, segment_radii, segment_lengths):
-    # Convert nodes to dictionary for faster access
-    node_coords = {int(n[0]): np.array([n[1], n[2], n[3]]) for n in nodes}  # index: [z, y, x]
+    # Build node coordinates
+    node_coords = {idx: np.array([n[1], n[2], n[3]]) for idx, n in enumerate(nodes)}
     
-    # Step 1: Build degree map for each node
-    from collections import defaultdict
-    node_to_segments = defaultdict(list)  # node index -> list of segment indices
-    for idx, (n1, n2) in enumerate(segments):
-        node_to_segments[n1].append(idx)
-        node_to_segments[n2].append(idx)
+    # Step 1: Find spatially coincident nodes (potential junction points)
+    coords_array = np.array([node_coords[i] for i in sorted(node_coords.keys())])
+    node_indices = sorted(node_coords.keys())
+    tree = cKDTree(coords_array)
     
-    branching_angles = []
-    # Step 2: Loop through nodes of degree 3
-    for node_idx, seg_indices in node_to_segments.items():
-        if len(seg_indices) != 3:
-            continue  # skip non-degree-3 nodes
+    # Find nodes within a small distance threshold (consider them same junction)
+    distance_threshold = 0.1  # Adjust based on your data scale
+    node_groups = defaultdict(list)
+    visited = set()
+    
+    for i, node_idx in enumerate(node_indices):
+        if node_idx in visited:
+            continue
         
-        # Step 3: Identify parent (segment with largest radius)
+        # Find all nodes within threshold distance
+        nearby_indices = tree.query_ball_point(coords_array[i], distance_threshold)
+        nearby_nodes = [node_indices[j] for j in nearby_indices]
+        
+        if len(nearby_nodes) > 1:
+            # These nodes are at the same location - use first as representative
+            representative = nearby_nodes[0]
+            node_groups[representative] = nearby_nodes
+            visited.update(nearby_nodes)
+    
+    # Step 2: Build connectivity using spatial junctions
+    node_to_segments = defaultdict(list)
+    
+    # Create mapping from any node to its representative
+    node_to_representative = {}
+    for rep, group in node_groups.items():
+        for node in group:
+            node_to_representative[node] = rep
+    
+    for idx, (n1, n2) in enumerate(segments):
+        # Map to representative nodes if they're part of a junction
+        rep_n1 = node_to_representative.get(n1, n1)
+        rep_n2 = node_to_representative.get(n2, n2)
+        
+        # Add segment to both representative nodes
+        node_to_segments[rep_n1].append(idx)
+        node_to_segments[rep_n2].append(idx)
+    
+    branching_angles = []
+    
+    # Step 3: Loop through nodes of degree 3
+    degree_3_nodes = [(node_idx, seg_indices) for node_idx, seg_indices in node_to_segments.items() if len(seg_indices) == 3]
+    
+    for node_idx, seg_indices in degree_3_nodes:
+        # Step 4: Identify parent (segment with largest radius)
         radii = [segment_radii[i] for i in seg_indices]
         parent_idx = seg_indices[np.argmax(radii)]
         child_indices = [i for i in seg_indices if i != parent_idx]
         
-        # **FIX: Check if we have exactly 2 child segments**
         if len(child_indices) != 2:
-            continue  # Skip this node if we don't have exactly 2 children
+            continue
         
-        # Step 4: Find central node coordinates
+        # Step 5: Find central node coordinates
         center = node_coords[node_idx]
         
-        # Step 5: For each child segment, find the *other* node to get direction
+        # Step 6: For each child segment, find direction vector
         child_vectors = []
         for seg_idx in child_indices:
             n1, n2 = segments[seg_idx]
-            other_node = n2 if n1 == node_idx else n1
-            vec = node_coords[other_node] - center
+            
+            # Find which end is NOT at the junction
+            rep_n1 = node_to_representative.get(n1, n1)
+            rep_n2 = node_to_representative.get(n2, n2)
+            
+            if rep_n1 == node_idx:
+                other_node = n2
+            elif rep_n2 == node_idx:
+                other_node = n1
+            else:
+                other_node = n2 if n1 == node_idx else n1
+            
+            other_coords = node_coords[other_node]
+            vec = other_coords - center
             child_vectors.append(vec)
+        
+        if len(child_vectors) != 2:
+            continue
         
         # Normalize child vectors
         norm1 = np.linalg.norm(child_vectors[0])
-        v1 = child_vectors[0] / norm1 if norm1 > 0 else np.zeros_like(child_vectors[0])
-        
         norm2 = np.linalg.norm(child_vectors[1])
-        v2 = child_vectors[1] / norm2 if norm2 > 0 else np.zeros_like(child_vectors[1])
         
-        # **FIX: Skip if either vector has zero length**
         if norm1 == 0 or norm2 == 0:
             continue
         
-        # Step 6: Compute angle in degrees
+        v1 = child_vectors[0] / norm1
+        v2 = child_vectors[1] / norm2
+        
+        # Step 7: Compute angle in degrees
         dot_product = np.clip(np.dot(v1, v2), -1.0, 1.0)
         angle_rad = np.arccos(dot_product)
         angle_deg = np.degrees(angle_rad)
+        
+        if np.isnan(angle_deg):
+            continue
+        
         branching_angles.append(angle_deg)
     
     return branching_angles
@@ -596,3 +600,4 @@ if __name__ == "__main__":
     main()
 
     
+
