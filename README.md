@@ -99,7 +99,7 @@ Below is an example workflow for **cleaning a vessel segmentation** using a reco
 
 
 > **Note on Centerline Tree parameters:**  
-> You can use Avizo's default parameters or start with optimized values from [Walsh et al. (2024)](https://doi.org/10.1016/j.compbiomed.2024.108140): **Slope = 5.81**, **zeroVal = 2.6**, **Number of parts = -1** (always use -1 for binary segmentations).
+> You can use Avizo's default parameters or start with optimized values from [Walsh et al. (2024)](https://doi.org/10.1016/j.compbiomed.2024.108140): **Slope = 5.81**, **zeroVal = 2.6**, **Number of parts = -1** (always use -1 for binary segmentations). The paper also includes a guide for network-specific parameter optimization.
 > 
 > These parameters control branch detection sensitivity. Each branch covers a tube-like volume where voxels within `slope × boundary_distance + zeroVal` are excluded from further endpoint searches, preventing excessive side branches. Lower slope values increase skeleton accuracy but may introduce false branches in collapsed or non-circular vessels.
 > 
