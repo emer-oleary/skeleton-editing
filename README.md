@@ -1,6 +1,6 @@
 # 🩻 Skeleton Graph Editing Toolkit
 
-Python scripts for reconstructing, cleaning, and analyzing 3D blood vessel skeletons from high-resolution CT segmentations (`.tif) and Avizo SpatialGraph (`.am`) files. Designed for vascular connectivity, permeability, and flow modeling pipelines.
+Python scripts for reconstructing, cleaning, and analyzing 3D blood vessel skeletons from high-resolution CT segmentations (`.tif`) and Avizo SpatialGraph (`.am`) files. Designed for vascular connectivity, permeability, and flow modeling pipelines.
 
 ## ⚙️ Environment Setup
 
